@@ -1,68 +1,102 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe, UseInterceptors, SerializeOptions, HttpException, HttpStatus } from '@nestjs/common';
-import { UserService } from 'src/shared/services/user.service';
-import { CreateUserDto, UpdateUserDto } from 'src/shared/dtos/user.dto';
-import { ApiOperation, ApiResponse, ApiParam, ApiBody, ApiTags, ApiCookieAuth, ApiBearerAuth } from '@nestjs/swagger';
-import { ClassSerializerInterceptor } from '@nestjs/common';
+import { applyDecorators, Body, ClassSerializerInterceptor, Controller, Delete, Get, HttpException, HttpStatus, Param, ParseIntPipe, Post, Put, SerializeOptions, UseInterceptors } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { CreateUserDto, UpdateUserDto } from 'src/shared/dto/user.dto';
 import { User } from 'src/shared/entities/user.entity';
+import { UserService } from 'src/shared/services/user.service';
 import { Result } from 'src/shared/vo/result';
-@ApiTags('api/users')
-@SerializeOptions({ strategy: 'exposeAll' })
-@UseInterceptors(ClassSerializerInterceptor)
+import { I18n, I18nContext } from 'nestjs-i18n';
 @Controller('api/users')
+@SerializeOptions({
+    strategy: 'exposeAll'
+})
+@UseInterceptors(ClassSerializerInterceptor)
+@ApiTags('api/users')
 export class UserController {
-    constructor(private readonly userService: UserService) { }
-
+   constructor(
+       private readonly userService: UserService
+   ) { }
+   @Get('hello')
+   async getHello(@I18n() i18n: I18nContext) {
+       return await i18n.t('greeting.hello', {
+           args: { name: 'UserController' }
+       });
+   }
     @Get()
-    @ApiOperation({ summary: '获取所有用户列表' })
-    @ApiResponse({ status: 200, description: '成功返回用户列表', type: [User] })
+    @ApiFindAll()
     async findAll() {
         return this.userService.findAll();
     }
-
-    @Get(':id')
-    @ApiOperation({ summary: '根据ID获取用户信息' })
-    @ApiParam({ name: 'id', description: '用户ID', type: Number })
-    @ApiResponse({ status: 200, description: '成功返回用户信息', type: User })
-    @ApiResponse({ status: 404, description: '用户未找到' })
-    async findOne(@Param('id', ParseIntPipe) id: number) {
-        return this.userService.findOne({ where: { id } });
+    @Get(":id")
+    @ApiFindOne()
+    async findOne(@Param("id", ParseIntPipe) id: number) {
+        const result = await this.userService.findOne({ where: { id } });
+        if (result) {
+            return result;
+        } else {
+            throw new HttpException('用户未找到', HttpStatus.NOT_FOUND)
+        }
     }
-
     @Post()
-    @ApiBearerAuth()
-    @ApiOperation({ summary: '创建新用户' })
-    @ApiBody({ type: CreateUserDto })
-    @ApiResponse({ status: 201, description: '用户成功创建', type: User })
-    @ApiResponse({ status: 400, description: '请求参数错误' })
+    @ApiCreate()
     async create(@Body() createUserDto: CreateUserDto) {
         return this.userService.create(createUserDto);
     }
-
-    @Put(':id')
-    @ApiOperation({ summary: '更新用户信息' })
-    @ApiParam({ name: 'id', description: '用户ID', type: Number })
-    @ApiBody({ type: UpdateUserDto })
-    @ApiResponse({ status: 200, description: '用户信息更新成功', type: Result })
-    @ApiResponse({ status: 400, description: '请求参数错误' })
-    @ApiResponse({ status: 404, description: '用户未找到' })
-    async update(@Param('id', ParseIntPipe) id: number, @Body() updateUserDto: UpdateUserDto) {
-        const updateResult = await this.userService.update(id, updateUserDto);
-        if (!updateResult.affected) {
-            throw new HttpException('用户未找到', HttpStatus.NOT_FOUND);
+    @Put(":id")
+    @ApiUpdate()
+    async update(@Param("id", ParseIntPipe) id: number, @Body() updateUserDto: UpdateUserDto) {
+        const result = await this.userService.update(id, updateUserDto);
+        if (result.affected) {
+            return Result.success('更新用户成功');
+        } else {
+            throw new HttpException('用户未找到', HttpStatus.NOT_FOUND)
         }
-        return Result.success('用户信息更新成功');
     }
-
-    @Delete(':id')
-    @ApiOperation({ summary: '删除用户' })
-    @ApiParam({ name: 'id', description: '用户ID', type: Number })
-    @ApiResponse({ status: 200, description: '用户删除成功', type: Result })
-    @ApiResponse({ status: 404, description: '用户未找到' })
-    async delete(@Param('id', ParseIntPipe) id: number) {
-        const deleteResult = await this.userService.delete(id);
-        if (!deleteResult.affected) {
-            throw new HttpException('用户未找到', HttpStatus.NOT_FOUND);
+    @Delete(":id")
+    @ApiDelete()
+    async delete(@Param("id", ParseIntPipe) id: number) {
+        const result = await this.userService.delete(id);
+        if (result.affected) {
+            return Result.success('删除用户成功');
+        } else {
+            throw new HttpException('用户未找到', HttpStatus.NOT_FOUND)
         }
-        return Result.success('用户删除成功');
     }
+}
+function ApiFindAll() {
+    return applyDecorators(
+        ApiOperation({ summary: '获取所有的用户列表' }),
+        ApiResponse({ status: 200, description: '成功返回用户列表', type: [User] })
+    );
+}
+function ApiFindOne() {
+    return applyDecorators(ApiOperation({ summary: '根据ID获取某个用户信息' }),
+        ApiParam({ name: 'id', description: '用户ID', type: Number }),
+        ApiResponse({ status: 200, description: '成功返回用户信息', type: User }),
+        ApiResponse({ status: 404, description: '用户未找到' }))
+}
+function ApiCreate() {
+    return applyDecorators(
+        ApiOperation({ summary: '创建新用户' }),
+        ApiBearerAuth(),
+        ApiBody({ type: CreateUserDto }),
+        ApiResponse({ status: 201, description: '用户创建成功', type: User }),
+        ApiResponse({ status: 400, description: '请求参数错误' })
+    );
+}
+function ApiUpdate() {
+    return applyDecorators(
+        ApiOperation({ summary: '更新用户信息' }),
+        ApiBody({ type: UpdateUserDto }),
+        ApiResponse({ status: 200, description: '用户信息更新成功', type: Result }),
+        ApiResponse({ status: 400, description: '请求参数错误' }),
+        ApiResponse({ status: 404, description: '用户未找到' })
+    );
+}
+function ApiDelete() {
+    return applyDecorators(
+        ApiOperation({ summary: '根据ID删除用户' }),
+        ApiParam({ name: 'id', description: '用户ID', type: Number }),
+        ApiResponse({ status: 200, description: '用户删除成功', type: Result }),
+        ApiResponse({ status: 404, description: '用户未找到' })
+    );
 }
