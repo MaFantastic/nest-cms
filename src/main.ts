@@ -12,6 +12,7 @@ import * as helpers from 'src/shared/helpers';
 async function bootstrap() {
   // 使用 NestFactory 创建一个 NestExpressApplication 实例
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  //自定义验证器实现依赖注入
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
   // 配置静态资源目录
   app.useStaticAssets(join(__dirname, '..', 'public'));
